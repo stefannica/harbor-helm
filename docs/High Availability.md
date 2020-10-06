@@ -30,8 +30,8 @@ As for storage layer, it is expected that the user provide high available Postgr
 Download Harbor helm chart:
 
 ```bash
-helm repo add harbor https://helm.goharbor.io
-helm fetch harbor/harbor --untar
+helm repo add suse https://kubernetes-charts.suse.com
+helm fetch suse/harbor --untar
 ```
 
 ### Configuration
