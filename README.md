@@ -1,12 +1,10 @@
-# Helm Chart for Harbor
+# Helm Chart for SUSE Private Registry
 
-**Notes:** The master branch is in heavy development, please use the other stable versions instead. A high available solution for Harbor based on chart can be find [here](docs/High%20Availability.md). And refer to the [guide](docs/Upgrade.md) to upgrade the existing deployment.
-
-This repository, including the issues, focus on deploying Harbor chart via helm.  So for the functionality issues or questions of Harbor, please open issues on [goharbor/harbor](https://github.com/goharbor/harbor)
+**Notes:** A high available solution for Harbor based on chart can be find [here](docs/High%20Availability.md). And refer to the [guide](docs/Upgrade.md) to upgrade the existing deployment.
 
 ## Introduction
 
-This [Helm](https://github.com/kubernetes/helm) chart installs [Harbor](https://github.com/goharbor/harbor) in a Kubernetes cluster. Welcome to [contribute](CONTRIBUTING.md) to Helm Chart for Harbor.
+This Helm chart installs SUSE Private Registry in a Kubernetes cluster.
 
 ## Prerequisites
 
@@ -18,7 +16,7 @@ This [Helm](https://github.com/kubernetes/helm) chart installs [Harbor](https://
 ### Add Helm repository
 
 ```bash
-helm repo add harbor https://helm.goharbor.io
+helm repo add suse https://kubernetes-charts.suse.com
 ```
 
 ### Configure the chart
@@ -63,11 +61,11 @@ Install the Harbor helm chart with a release name `my-release`:
 
 helm 2:
 ```bash
-helm install --name my-release harbor/harbor
+helm install --name my-release suse/harbor
 ```
 helm 3:
 ```bash
-helm install my-release harbor/harbor
+helm install my-release suse/harbor
 ```
 
 ## Uninstallation
