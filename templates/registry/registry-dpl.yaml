@@ -36,7 +36,7 @@ spec:
 {{- end }}
     spec:
       securityContext:
-        fsGroup: 10000
+        fsGroup: 10001
 {{- if .Values.registry.serviceAccountName }}
       serviceAccountName: {{ .Values.registry.serviceAccountName }}
 {{- end -}}
@@ -44,6 +44,48 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      initContainers:
+      - name: "change-pemission-of-directory"
+        securityContext:
+          runAsUser: 0
+        image: {{ .Values.registry.registry.image.repository }}:{{ .Values.registry.registry.image.tag }}
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        command: ["/bin/sh"]
+        args: [
+            "-c",
+            "chown -R registry:registry {{ .Values.persistence.imageChartStorage.filesystem.rootdirectory }} &&
+            chmod -R g+w {{ .Values.persistence.imageChartStorage.filesystem.rootdirectory }}"
+        ]
+        volumeMounts:
+        - name: registry-data
+          mountPath: {{ .Values.persistence.imageChartStorage.filesystem.rootdirectory }}
+          subPath: {{ .Values.persistence.persistentVolumeClaim.registry.subPath }}
+      - name: "install-certificates"
+        securityContext:
+          runAsUser: 0
+        image: {{ .Values.registry.registry.image.repository }}:{{ .Values.registry.registry.image.tag }}
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        command: ["/bin/sh"]
+        args: [
+            '-c',
+            '/usr/bin/harbor-install-cert.sh &&
+            cp -ar /var/lib/ca-certificates/* /tmp/ca-certificates' ]
+        volumeMounts:
+        - name: ca-certificates
+          mountPath: /tmp/ca-certificates
+          readOnly: false
+        {{- if .Values.internalTLS.enabled }}
+        - name: registry-internal-certs
+          mountPath: /etc/harbor/ssl/registry
+        {{- end }}
+        {{- if .Values.persistence.imageChartStorage.caBundleSecretName }}
+        - name: storage-service-ca
+          mountPath: /harbor_cust_cert/custom-ca-bundle.crt
+          subPath: ca.crt
+        {{- end }}
+        {{- if .Values.caBundleSecretName }}
+{{ include "harbor.caBundleVolumeMount" . | indent 8 }}
+        {{- end }}
       containers:
       - name: registry
         image: {{ .Values.registry.registry.image.repository }}:{{ .Values.registry.registry.image.tag }}
@@ -93,6 +135,8 @@ spec:
         - containerPort: {{ template "harbor.registry.containerPort" . }}
         - containerPort: 5001
         volumeMounts:
+        - name: ca-certificates
+          mountPath: /var/lib/ca-certificates
         - name: registry-data
           mountPath: {{ .Values.persistence.imageChartStorage.filesystem.rootdirectory }}
           subPath: {{ .Values.persistence.persistentVolumeClaim.registry.subPath }}
@@ -177,6 +221,8 @@ spec:
         ports:
         - containerPort: {{ template "harbor.registryctl.containerPort" . }}
         volumeMounts:
+        - name: ca-certificates
+          mountPath: /var/lib/ca-certificates
         - name: registry-data
           mountPath: {{ .Values.persistence.imageChartStorage.filesystem.rootdirectory }}
           subPath: {{ .Values.persistence.persistentVolumeClaim.registry.subPath }}
@@ -204,6 +250,8 @@ spec:
 {{ include "harbor.caBundleVolumeMount" . | indent 8 }}
         {{- end }}
       volumes:
+      - name: "ca-certificates"
+        emptyDir: {}
       - name: registry-htpasswd
         secret:
           secretName: {{ template "harbor.registry" . }}
