@@ -44,6 +44,28 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      initContainers:
+      - name: "install-certificates"
+        securityContext:
+          runAsUser: 0
+        image: {{ .Values.jobservice.image.repository }}:{{ .Values.jobservice.image.tag }}
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        command: ["/bin/sh"]
+        args: [
+            '-c',
+            '/usr/bin/harbor-install-cert.sh &&
+            cp -ar /var/lib/ca-certificates/* /tmp/ca-certificates' ]
+        volumeMounts:
+        - name: ca-certificates
+          mountPath: /tmp/ca-certificates
+          readOnly: false
+        {{- if .Values.internalTLS.enabled }}
+        - name: jobservice-internal-certs
+          mountPath: /etc/harbor/ssl/jobservice
+        {{- end }}
+        {{- if .Values.caBundleSecretName }}
+{{ include "harbor.caBundleVolumeMount" . | indent 8 }}
+        {{- end }}
       containers:
       - name: jobservice
         image: {{ .Values.jobservice.image.repository }}:{{ .Values.jobservice.image.tag }}
@@ -90,6 +112,8 @@ spec:
         ports:
         - containerPort: {{ template "harbor.jobservice.containerPort" . }}
         volumeMounts:
+        - name: ca-certificates
+          mountPath: /var/lib/ca-certificates
         - name: jobservice-config
           mountPath: /etc/jobservice/config.yml
           subPath: config.yml
@@ -104,6 +128,8 @@ spec:
 {{ include "harbor.caBundleVolumeMount" . | indent 8 }}
         {{- end }}
       volumes:
+      - name: "ca-certificates"
+        emptyDir: {}
       - name: jobservice-config
         configMap:
           name: "{{ template "harbor.jobservice" . }}"
