@@ -41,6 +41,29 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       automountServiceAccountToken: false
+      {{- if or .Values.internalTLS.enabled .Values.caBundleSecretName }}
+      initContainers:
+      - name: "install-certificates"
+        securityContext:
+          runAsUser: 0
+        image: {{ .Values.core.image.repository }}:{{ .Values.core.image.tag }}
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        command: ["/bin/sh"]
+        args: [
+          '-c',
+          '/usr/bin/harbor-install-cert.sh && cp -ar /var/lib/ca-certificates/* /tmp/ca-certificates' ]
+        volumeMounts:
+        - name: ca-certificates
+          mountPath: /tmp/ca-certificates
+          readOnly: false
+        {{- if .Values.internalTLS.enabled }}
+        - name: core-internal-certs
+          mountPath: /etc/harbor/ssl/core
+        {{- end }}
+        {{- if .Values.caBundleSecretName }}
+{{ include "harbor.caBundleVolumeMount" . | indent 8 }}
+        {{- end }}
+      {{- end }}
       containers:
       - name: core
         image: {{ .Values.core.image.repository }}:{{ .Values.core.image.tag }}
@@ -111,6 +134,10 @@ spec:
         ports:
         - containerPort: {{ template "harbor.core.containerPort" . }}
         volumeMounts:
+        {{- if or .Values.internalTLS.enabled .Values.caBundleSecretName }}
+        - name: ca-certificates
+          mountPath: /var/lib/ca-certificates
+        {{- end }}
         - name: config
           mountPath: /etc/core/app.conf
           subPath: app.conf
@@ -143,6 +170,10 @@ spec:
 {{ toYaml .Values.core.resources | indent 10 }}
 {{- end }}
       volumes:
+      {{- if or .Values.internalTLS.enabled .Values.caBundleSecretName }}
+      - name: "ca-certificates"
+        emptyDir: {}
+      {{- end }}
       - name: config
         configMap:
           name: {{ template "harbor.core" . }}
