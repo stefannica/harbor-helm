@@ -30,6 +30,7 @@ spec:
 {{ toYaml .Values.trivy.podAnnotations | indent 8 }}
 {{- end }}
     spec:
+      automountServiceAccountToken: false
 {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -37,13 +38,49 @@ spec:
 {{- if .Values.trivy.serviceAccountName }}
       serviceAccountName: {{ .Values.trivy.serviceAccountName }}
 {{- end }}
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 10000
-        fsGroup: 10000
-      automountServiceAccountToken: false
+      initContainers:
+        - name: "change-directory-owner"
+          securityContext:
+            runAsUser: 0
+          image: {{ .Values.trivy.image.repository }}:{{ .Values.trivy.image.tag }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command: ["/bin/sh"]
+          args: [
+            "-c",
+            "chown -R scanner:scanner /home/scanner/.cache"
+          ]
+          volumeMounts:
+          - name: data
+            mountPath: /home/scanner/.cache
+            subPath: {{ .Values.persistence.persistentVolumeClaim.trivy.subPath }}
+            readOnly: false
+        - name: "install-certificates"
+          securityContext:
+            runAsUser: 0
+          image: {{ .Values.trivy.image.repository }}:{{ .Values.trivy.image.tag }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command: ["/bin/sh"]
+          args: [
+             '-c',
+             '/usr/bin/harbor-install-cert.sh &&
+             cp -ar /var/lib/ca-certificates/* /tmp/ca-certificates' ]
+          volumeMounts:
+          - name: ca-certificates
+            mountPath: /tmp/ca-certificates
+            readOnly: false
+          {{- if .Values.internalTLS.enabled }}
+          - name: trivy-internal-certs
+            mountPath: /etc/harbor/ssl/trivy
+          {{- end }}
+          {{- if .Values.caBundleSecretName }}
+{{ include "harbor.caBundleVolumeMount" . | indent 10 }}
+          {{- end }}
       containers:
         - name: trivy
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10000
+            fsGroup: 10000
           image: {{ .Values.trivy.image.repository }}:{{ .Values.trivy.image.tag }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
           securityContext:
@@ -110,6 +147,8 @@ spec:
             - name: api-server
               containerPort: {{ template "harbor.trivy.containerPort" . }}
           volumeMounts:
+          - name: ca-certificates
+            mountPath: /var/lib/ca-certificates
           - name: data
             mountPath: /home/scanner/.cache
             subPath: {{ .Values.persistence.persistentVolumeClaim.trivy.subPath }}
@@ -141,8 +180,10 @@ spec:
             failureThreshold: 3
           resources:
 {{ toYaml .Values.trivy.resources | indent 12 }}
-      {{- if or (or .Values.internalTLS.enabled .Values.caBundleSecretName) (or (not .Values.persistence.enabled) $trivy.existingClaim) }}
       volumes:
+      - name: "ca-certificates"
+        emptyDir: {}
+      {{- if or (or .Values.internalTLS.enabled .Values.caBundleSecretName) (or (not .Values.persistence.enabled) $trivy.existingClaim) }}
       {{- if .Values.internalTLS.enabled }}
       - name: trivy-internal-certs
         secret:
