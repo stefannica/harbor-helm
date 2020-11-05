@@ -35,6 +35,7 @@ spec:
 {{- end }}
       securityContext:
         fsGroup: 10000
+        runAsUser: 10000
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
